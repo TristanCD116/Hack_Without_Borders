@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Navibian Land Claim Portal - Omusati Region</title>
+    
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.css" />
+    
+    <style>
+        :root { --primary: #2c3e50; --secondary: #3498db; --success: #27ae60; --warning: #f39c12; --danger: #e74c3c; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 0; background: #ecf0f1; color: #333; }
+        
+        /* Login Screen */
+        #login-screen { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; }
+        .login-box { background: white; padding: 40px; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); width: 350px; text-align: center; }
+        .login-box input, .login-box select { width: 100%; padding: 10px; margin: 10px 0; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
+        .btn { padding: 10px 15px; border: none; border-radius: 4px; background: var(--secondary); color: white; font-weight: bold; cursor: pointer; width: 100%; margin-top: 10px; }
+        .btn:hover { background: #2980b9; }
+        
+        /* Main App Layout */
+        #app-screen { display: none; height: 100vh; flex-direction: column; }
+        header { background: var(--primary); color: white; padding: 15px 20px; display: flex; justify-content: space-between; align-items: center; }
+        header a { color: #a4cbed; text-decoration: none; font-size: 0.9em; }
+        header a:hover { text-decoration: underline; }
+        
+        .main-container { display: flex; flex: 1; overflow: hidden; }
+        .sidebar { width: 350px; background: white; padding: 20px; overflow-y: auto; box-shadow: 2px 0 5px rgba(0,0,0,0.05); z-index: 2; }
+        #map { flex: 1; z-index: 1; }
+        
+        /* Claim Cards */
+        .claim-card { border: 1px solid #ddd; padding: 15px; margin-bottom: 15px; border-radius: 6px; background: #f9f9f9; }
+        .claim-card h3 { margin: 0 0 10px 0; font-size: 16px; }
+        .claim-card p { margin: 5px 0; font-size: 14px; }
+        .status-badge { display: inline-block; padding: 3px 8px; border-radius: 12px; font-size: 12px; color: white; font-weight: bold;}
+        .status-pending { background: var(--warning); }
+        .status-approved { background: var(--success); }
+        
+        /* Admin Popup Form */
+        .admin-action-form { margin-top: 10px; border-top: 1px solid #ccc; padding-top: 10px; }
+        .admin-action-form input { width: 100%; padding: 8px; margin-bottom: 10px; box-sizing: border-box; }
+        .btn-approve { background: var(--success); width: 48%; }
+        .btn-reject { background: var(--danger); width: 48%; }
+        .btn-logout { background: #7f8c8d; width: auto; padding: 8px 15px;}
+    </style>
+</head>
+<body>
+
+    <div id="login-screen">
+        <div class="login-box">
+            <h2>Portal Login</h2>
+            <select id="role-select">
+                <option value="citizen">Citizen of Namibia</option>
+                <option value="ta">Traditional Authority (TA) Admin</option>
+                <option value="clb">Communal Land Board (CLB) Admin</option>
+            </select>
+            <input type="text" id="email-input" placeholder="Email / Username" value="citizen@omusati.na">
+            <input type="password" id="password-input" placeholder="Password" value="password123">
+            <button class="btn" onclick="login()">Access System</button>
+        </div>
+    </div>
+
+    <div id="app-screen">
+        <header>
+            <div>
+                <h2 id="header-title" style="margin: 0;">Namibian Land Claim Portal</h2>
+                <span id="user-info" style="font-size: 0.9em; color: #bdc3c7;"></span>
+            </div>
+            <div>
+                <a href="https://www.lac.org.na/laws/annoSTAT/Communal%20Land%20Reform%20Act%205%20of%202002.pdf" target="_blank">View Namibian Land Claim Guidelines</a>
+                <button class="btn btn-logout" style="margin-left: 15px;" onclick="logout()">Logout</button>
+            </div>
+        </header>
+        
+        <div class="main-container">
+            <div class="sidebar">
+                <h3 id="sidebar-title">My Claims</h3>
+                <div id="claims-list">
+                    </div>
+            </div>
+            
+            <div id="map"></div>
+        </div>
+    </div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/pouchdb@8.0.1/dist/pouchdb.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@turf/turf@6/turf.min.js"></script>
+
+    <script>
+        // --- SYSTEM STATE & DB ---
+        const db = new PouchDB('omusati_land_registry');
+        let currentUser = null; // { role, email }
+        
+        let map, drawControl;
+        const allMapLayers = new L.FeatureGroup();
+        let savedFeatures = []; // Pure math geometry for Turf.js collision detection
+        
+        // Simulated Protected Water (Olushandja Dam area in Omusati)
+        const waterFeature = turf.polygon([[
+            [14.65, -17.40], [14.70, -17.40], [14.70, -17.48], [14.65, -17.48], [14.65, -17.40]
+        ]]);
+
+        // --- 1. AUTHENTICATION ---
+        function login() {
+            const role = document.getElementById('role-select').value;
+            const email = document.getElementById('email-input').value;
+            
+            if (!email) return alert("Please enter an email/username.");
+            
+            currentUser = { role, email };
+            
+            document.getElementById('login-screen').style.display = 'none';
+            document.getElementById('app-screen').style.display = 'flex';
+            
+            // Adjust UI based on role
+            document.getElementById('header-title').innerText = role === 'citizen' ? "MunyaMap Land Portal" : (role === 'ta' ? "MunyaMap: Traditional Authority Admin Portal" : "Munya Map: Communal Land Board Admin Portal");
+            document.getElementById('sidebar-title').innerText = role === 'citizen' ? "My Pending Claims" : "All System Claims";
+            if (role === 'citizen') document.getElementById('user-info').innerText = `Logged in as: ${email}`;
+
+            initMap();
+            loadClaims();
+        }
+
+        function logout() {
+            currentUser = null;
+            document.getElementById('app-screen').style.display = 'none';
+            document.getElementById('login-screen').style.display = 'flex';
+            if(map) { map.remove(); map = null; }
+        }
+
+        // --- 2. MAP INITIALIZATION ---
+        function initMap() {
+            // Centered on Omusati Region
+            map = L.map('map').setView([-17.45, 14.68], 12);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 18 }).addTo(map);
+            map.addLayer(allMapLayers);
+
+            // Setup Drawing Tools ONLY for Citizens
+            if (currentUser.role === 'citizen') {
+                drawControl = new L.Control.Draw({
+                    edit: false,
+                    draw: { marker: false, circle: false, circlemarker: false, polyline: false, polygon: true }
+                });
+                map.addControl(drawControl);
+
+                // Handle Citizen Drawing
+                map.on(L.Draw.Event.CREATED, async function (event) {
+                    const newGeoJSON = event.layer.toGeoJSON();
+                    
+                    // Validation 1: Size Limit (< 50 Hectares)
+                    const areaSqMeters = turf.area(newGeoJSON);
+                    const areaHectares = areaSqMeters / 10000;
+                    if (areaHectares > 50) {
+                        return alert(`❌ Claim Denied: Your plot is ${areaHectares.toFixed(2)} ha. Maximum allowed by CLRA is 50 ha.`);
+                    }
+
+                    // Validation 3: Existing Claim Overlap
+                    let collision = savedFeatures.some(f => turf.booleanIntersects(newGeoJSON, f));
+                    if (collision) {
+                        return alert("❌ Claim Denied: Boundary overlaps with an existing pending or approved claim.");
+                    }
+
+                    // If valid, save to database
+                    createNewClaim(newGeoJSON.geometry, areaHectares);
+                });
+            }
+        }
+
+        // --- 3. CLAIM CREATION & SYNC ---
+        async function createNewClaim(geometry, hectares) {
+            // Generate the secure key for the TA/CLB to verify
+            const cryptoKey = Math.random().toString(36).substring(2, 10).toUpperCase(); 
+            
+            const claim = {
+                _id: 'claim_' + new Date().toISOString(),
+                claimerEmail: currentUser.email,
+                date: new Date().toLocaleDateString(),
+                area: hectares.toFixed(2),
+                boundary: geometry,
+                cryptoKey: cryptoKey, // Passed to DB for admin verification
+                status: 'pending_ta', // Workflow: pending_ta -> pending_clb -> approved
+                type: 'land_claim'
+            };
+
+            await db.put(claim);
+            alert("✅ Claim Submitted! Awaiting Traditional Authority (TA) approval.");
+            loadClaims();
+        }
+
+        // --- 4. RENDER CLAIMS (MAP & LIST) ---
+        async function loadClaims() {
+            allMapLayers.clearLayers();
+            savedFeatures = [];
+            const claimsListDiv = document.getElementById('claims-list');
+            claimsListDiv.innerHTML = '';
+
+            const result = await db.allDocs({include_docs: true});
+            
+            result.rows.forEach(row => {
+                const claim = row.doc;
+                if(claim.type !== 'land_claim') return;
+
+                // Filter citizen view to only show their claims
+                if (currentUser.role === 'citizen' && claim.claimerEmail !== currentUser.email) return;
+
+                // 1. Add to Math Ledger for collision detection
+                savedFeatures.push(turf.feature(claim.boundary));
+
+                // 2. Add to Map
+                let color = claim.status === 'approved' ? '#27ae60' : '#f39c12';
+                const layer = L.geoJSON(claim.boundary, { style: { color: color, weight: 2, fillOpacity: 0.4 } });
+                
+                // Construct Popup
+                let popupContent = `
+                    <b>Claim ID:</b> ${claim._id.split('_')[1]}<br>
+                    <b>Claimer:</b> ${claim.claimerEmail}<br>
+                    <b>Area:</b> ${claim.area} hectares<br>
+                    <b>Status:</b> ${claim.status.replace('_', ' ').toUpperCase()}<br>
+                `;
+
+                // Admin Verification Form in Popup
+                if ((currentUser.role === 'ta' && claim.status === 'pending_ta') || 
+                    (currentUser.role === 'clb' && claim.status === 'pending_clb')) {
+                    popupContent += `
+                        <div class="admin-action-form">
+                            <input type="text" id="key-${claim._id}" placeholder="Enter Crypto Key to Verify">
+                            <button class="btn btn-approve" onclick="verifyAndApprove('${claim._id}', '${currentUser.role}')">Approve</button>
+                            <button class="btn btn-reject" onclick="rejectClaim('${claim._id}')">Deny</button>
+                        </div>
+                    `;
+                }
+
+                layer.bindPopup(popupContent);
+                allMapLayers.addLayer(layer);
+
+                // 3. Add to Sidebar List
+                let badgeClass = claim.status === 'approved' ? 'status-approved' : 'status-pending';
+                let adminKeyNote = (currentUser.role !== 'citizen') ? `<br><small style="color:red;">Secure Key: ${claim.cryptoKey}</small>` : '';
+
+                claimsListDiv.innerHTML += `
+                    <div class="claim-card">
+                        <h3>Claim: ${claim._id.split('_')[1].substring(0, 10)}...</h3>
+                        <p><b>Date:</b> ${claim.date}</p>
+                        <p><b>Size:</b> ${claim.area} ha</p>
+                        <p><span class="status-badge ${badgeClass}">${claim.status.replace('_', ' ').toUpperCase()}</span></p>
+                        ${adminKeyNote}
+                    </div>
+                `;
+            });
+        }
+
+        // --- 5. ADMIN VERIFICATION LOGIC ---
+        async function verifyAndApprove(claimId, role) {
+            const enteredKey = document.getElementById(`key-${claimId}`).value;
+            const claim = await db.get(claimId);
+
+            if (enteredKey !== claim.cryptoKey) {
+                return alert("❌ Invalid Crypto Key. Verification failed.");
+            }
+
+            // Advance workflow
+            if (role === 'ta') claim.status = 'pending_clb';
+            if (role === 'clb') claim.status = 'approved';
+            
+            await db.put(claim);
+            map.closePopup();
+            alert(`✅ Claim ${role.toUpperCase()} Approved.`);
+            loadClaims();
+        }
+
+        async function rejectClaim(claimId) {
+            if(!confirm("Are you sure you want to completely deny and remove this claim?")) return;
+            const claim = await db.get(claimId);
+            await db.remove(claim); // If rejected, it is removed from the map
+            map.closePopup();
+            alert("❌ Claim has been denied and removed from the ledger.");
+            loadClaims();
+        }
+
+        // Live Sync Listener (Updates UI instantly if another device makes a change)
+        db.changes({ since: 'now', live: true, include_docs: true }).on('change', () => {
+            if(currentUser) loadClaims();
+        });
+
+    </script>
+</body>
+</html>
