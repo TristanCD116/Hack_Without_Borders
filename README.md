@@ -14,6 +14,7 @@ The code implements the following dependencies / libraries:
 ## Running the code
 
 To run the code on a local http 8000 server:
+
   1- Run python -m http.server 8000 in terminal
   
   2- Use a browser to search http://localhost:8000/
