@@ -46,7 +46,7 @@
         .map-toast.warning { background: var(--warning); }
         .map-toast.info    { background: var(--secondary); }
 
-        /* ─── Map dialog overlay */
+        /* Map dialog overlay */
         .map-dialog-overlay {
             position: absolute; top: 0; left: 0; right: 0; bottom: 0;
             background: rgba(0,0,0,0.45); z-index: 1200;
@@ -79,7 +79,7 @@
         .status-hearing   { background: var(--hearing); }
         .rejection-reason { color: #e74c3c; font-size: 12px; margin-top: 4px; padding: 6px; background: #fdecea; border-radius: 4px; }
 
-        /* Admin Popup Form (inside Leaflet map popups) */
+        /* / Admin Popup Form */ */
         .admin-action-form { margin-top: 10px; border-top: 1px solid #ccc; padding-top: 10px; }
         .admin-action-form input { width: 100%; padding: 8px; margin-bottom: 10px; box-sizing: border-box; border: 1px solid #ccc; border-radius: 4px; }
         .btn-approve { background: var(--success); width: 48%; }
@@ -91,7 +91,7 @@
 </head>
 <body>
 
-    <!-- ═══════════ LOGIN SCREEN ═══════════ -->
+    <!--LOGIN SCREEN-->
     <div id="login-screen">
         <div class="login-box">
             <h2>Portal Login</h2>
@@ -111,7 +111,7 @@
         </div>
     </div>
 
-    <!-- ═══════════ APP SCREEN ═══════════ -->
+    <!--APP SCREEN-->
     <div id="app-screen">
         <header>
             <div>
@@ -130,7 +130,6 @@
                 <div id="claims-list"></div>
             </div>
 
-            <!-- Map wrapper: toast and dialog are positioned inside here -->
             <div class="map-wrapper">
                 <div id="map"></div>
                 <div id="map-toast" class="map-toast"></div>
@@ -141,30 +140,29 @@
         </div>
     </div>
 
-    <!-- ═══════════ LIBRARIES ═══════════ -->
+    <!--LIBRARIES-->
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/pouchdb@8.0.1/dist/pouchdb.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@turf/turf@6/turf.min.js"></script>
 
     <script>
-    // ══════════════════════════════════════════════════════════════════════════
+
     //  SYSTEM STATE & DATABASE
-    // ══════════════════════════════════════════════════════════════════════════
     const db = new PouchDB('omusati_land_registry');
     let currentUser = null;           // { role, email }
 
     let map, drawControl;
     const allMapLayers = new L.FeatureGroup();
-    let savedFeatures  = [];          // Active claim geometries for collision detection
-    let claimLayerMap  = {};          // claim._id → Leaflet layer (click-to-navigate)
+    let savedFeatures  = [];          
+    let claimLayerMap  = {};          
     let waterPolygons  = [];          // Turf polygon features for water bodies
     let waterMapLayer  = null;        // Leaflet layer group for rendered water overlays
 
-    // Debounce timer for loadClaims – prevents double-rendering
+    // Debounce timer for loadClaims 
     let _loadClaimsTimer = null;
 
-    // ── Credentials ──────────────────────────────────────────────────────────
+    // creds
     const CREDENTIALS = {
         citizen: { password: 'citizen123' },
         ta:      { email: 'ta@omusati.na',  password: 'ta_pass_789'  },
@@ -190,7 +188,7 @@
     [14.2874, -17.3881]
 ]]);
 
-    // Omusati service-region border (approximate) — drawn on map as dashed line
+    // Omusati service-region border 
     const omusatiCoords = [
     [-17.3881, 14.2874],
     [-17.3885, 15.5591],
@@ -209,11 +207,6 @@
     [-17.3881, 14.2874]
 ];
 
-
-    // ══════════════════════════════════════════════════════════════════════════
-    //  CUSTOM MAP NOTIFICATIONS (replace browser alert / confirm / prompt)
-    // ══════════════════════════════════════════════════════════════════════════
-
     /** Toast notification that appears over the map */
     function notify(message, type = 'info', duration = 4000) {
         const el = document.getElementById('map-toast');
@@ -225,7 +218,7 @@
         el._t = setTimeout(() => el.classList.remove('show'), duration);
     }
 
-    /** Confirm dialog over the map – returns Promise<boolean> */
+    /** Confirm dialog over the map */
     function mapConfirm(message) {
         return new Promise(resolve => {
             const overlay = document.getElementById('map-dialog-overlay');
@@ -243,7 +236,7 @@
         });
     }
 
-    /** Prompt dialog over the map – returns Promise<string|null> */
+    /** Prompt dialog over the mapP */
     function mapPrompt(message) {
         return new Promise(resolve => {
             const overlay = document.getElementById('map-dialog-overlay');
@@ -262,9 +255,7 @@
         });
     }
 
-    // ══════════════════════════════════════════════════════════════════════════
-    //  1. AUTHENTICATION
-    // ══════════════════════════════════════════════════════════════════════════
+    // Authentification
     function login() {
         const role     = document.getElementById('role-select').value;
         const email    = document.getElementById('email-input').value.trim();
@@ -299,7 +290,7 @@
         document.getElementById('user-info').innerText = `Logged in as: ${email}`;
 
         initMap();
-        loadClaims();   // initial load (debounced listener handles subsequent updates)
+        loadClaims();   // initial load 
     }
 
     function logout() {
@@ -310,13 +301,11 @@
         if (map) { map.remove(); map = null; }
     }
 
-    // ══════════════════════════════════════════════════════════════════════════
-    //  2. MAP INITIALIZATION
-    // ══════════════════════════════════════════════════════════════════════════
+    // Map init
     function initMap() {
         map = L.map('map', { zoomControl: true }).setView([-17.45, 14.68], 12);
 
-        // ── Base layer: standard OpenStreetMap (shows water in blue) ──
+        // Base layer: standard OpenStreetMap
         const osmBase = L.tileLayer(
             'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
             {
@@ -327,7 +316,7 @@
             }
         );
 
-        // ── Overlay: ESRI satellite imagery at 65 % opacity ──
+        // Overlay: ESRI satellite imagery at 65 % opacity
         const satOverlay = L.tileLayer(
             'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
             {
@@ -349,17 +338,15 @@
 
         // ── Draw Omusati service-region border ──
         L.polygon(omusatiCoords, {
-            color: '#e67e22', weight: 2.5, dashArray: '10,6',
+            color: '#FF0000', weight: 2.5, dashArray: '10,6',
             fillOpacity: 0, interactive: false
         }).addTo(map).bindTooltip('Omusati Service Region', { permanent: false, direction: 'center' });
 
-        // ── Fetch live water bodies from OpenStreetMap (Overpass API) ──
+        // Add da water
         fetchWaterBodies();
-
-        // Fix Leaflet rendering after container becomes visible
         setTimeout(() => map.invalidateSize(), 200);
 
-        // ── Drawing tools (citizens only) ──
+        // Drawing tools 
         if (currentUser.role === 'citizen') {
             drawControl = new L.Control.Draw({
                 edit: false,
@@ -368,7 +355,7 @@
                     circle:       false,
                     circlemarker: false,
                     polyline:     false,
-                    rectangle:    false,   // prevents unwanted blue square
+                    rectangle:    false,  
                     polygon:      true
                 }
             });
@@ -383,12 +370,12 @@
                     return notify(`Claim Denied: Your plot is ${areaHectares.toFixed(2)} ha. Maximum allowed by CLRA is 50 ha.`, 'error', 5000);
                 }
 
-                // Validation 2 – Must be inside Omusati coords
+                // Must be inside Omusati coords
                 if (!turf.booleanContains(bounds, turf.feature(newGeoJSON.geometry))) {
                     return notify("Claim Denied: Your claim must be located within the Omusati region.", 'error', 5000);
                 }
 
-                // Validation 3 – No water bodies
+                // No water bodies
                 const hitsWater = waterPolygons.some(wp => {
                     try { return turf.booleanIntersects(newGeoJSON, wp); } catch(e) { return false; }
                 });
@@ -396,7 +383,7 @@
                     return notify("Claim Denied: Your claim overlaps with a body of water.", 'error', 5000);
                 }
 
-                // Validation 4 – Existing claim overlap → offer hearing request
+                // Existing claim overlap 
                 const overlaps = savedFeatures.some(f => turf.booleanIntersects(newGeoJSON, f));
                 if (overlaps) {
                     const wantHearing = await mapConfirm(
@@ -414,11 +401,7 @@
         }
     }
 
-    // ══════════════════════════════════════════════════════════════════════════
-    //  WATER BODY MANAGEMENT
-    // ══════════════════════════════════════════════════════════════════════════
-
-    /** Render all known water polygons as blue overlays on the map */
+    // Render all known water
     function renderWaterOverlay() {
         if (waterMapLayer) map.removeLayer(waterMapLayer);
         waterMapLayer = L.layerGroup();
@@ -428,15 +411,15 @@
                     style: { color: '#0077be', weight: 1, fillOpacity: 0.25, fillColor: '#2196F3' },
                     interactive: false
                 }).addTo(waterMapLayer);
-            } catch(e) { /* skip bad geometries */ }
+            } catch(e) {  }
         });
         waterMapLayer.addTo(map);
     }
 
-    /** Fetch water bodies from OpenStreetMap via Overpass API for the Omusati region */
+    // Fetch water bodies from OpenStreetMap 
     async function fetchWaterBodies() {
         try {
-            // south, west, north, east  (Omusati region bbox)
+
             const bbox  = '-18.6,13.7,-17.2,15.8';
             const query = `[out:json][timeout:30];(way["natural"="water"](${bbox});relation["natural"="water"](${bbox});way["waterway"="riverbank"](${bbox}););out geom;`;
             const resp  = await fetch('https://overpass-api.de/api/interpreter?data=' + encodeURIComponent(query));
@@ -468,7 +451,7 @@
         }
     }
 
-    /** Convert an Overpass way geometry array [{lat,lon},...] → Turf polygon (or null) */
+    // Convert an Overpass way geometry array 
     function wayGeomToTurf(geom) {
         try {
             const coords = geom.map(g => [g.lon, g.lat]);
@@ -480,9 +463,7 @@
         } catch(e) { return null; }
     }
 
-    // ══════════════════════════════════════════════════════════════════════════
-    //  3. CLAIM CREATION
-    // ══════════════════════════════════════════════════════════════════════════
+    //Claims
     async function createNewClaim(geometry, hectares) {
         const taCryptoKey  = Math.random().toString(36).substring(2, 10).toUpperCase();
         const clbCryptoKey = Math.random().toString(36).substring(2, 10).toUpperCase();
@@ -501,7 +482,7 @@
 
         await db.put(claim);
         notify("Claim Submitted! Awaiting Traditional Authority (TA) approval.", 'success');
-        // loadClaims() fires via the debounced db.changes listener — no explicit call here
+        
     }
 
     async function createHearingRequest(geometry, hectares) {
@@ -520,10 +501,7 @@
         notify("Hearing request submitted. You will be contacted with hearing details.", 'info');
     }
 
-    // ══════════════════════════════════════════════════════════════════════════
     //  4. RENDER CLAIMS  (MAP & SIDEBAR)
-    //     – debounced so rapid db.changes events don't cause duplicates
-    // ══════════════════════════════════════════════════════════════════════════
 
     function scheduleLoadClaims() {
         clearTimeout(_loadClaimsTimer);
@@ -548,19 +526,18 @@
             const isOwnClaim = claim.claimerEmail === currentUser.email;
             const isAdmin    = currentUser.role === 'ta' || currentUser.role === 'clb';
 
-            // ── Rejected-claim visibility rules ──
             // Rejected claims ONLY visible to the citizen who owns them.
             // They do NOT appear on TA or CLB portals at all.
             if (claim.status === 'rejected') {
-                if (!isOwnClaim || isAdmin) return;          // skip entirely for admins & other citizens
+                if (!isOwnClaim || isAdmin) return;          
             }
 
-            // Collision detection: only active (non-rejected) claims
+            // Collision detection: only active claims
             if (claim.status !== 'rejected') {
                 savedFeatures.push(turf.feature(claim.boundary));
             }
 
-            // Sidebar visibility: citizens see only their own; admins see all (except rejected, filtered above)
+            // Sidebar citizens see only their own)
             const showInSidebar = isAdmin || isOwnClaim;
 
             // color coding 
@@ -602,7 +579,7 @@
             allMapLayers.addLayer(layer);
             claimLayerMap[claim._id] = layer;
 
-            // ── Sidebar card ──
+            // s Sidebar card
             if (!showInSidebar) return;
 
             const badgeClass =
@@ -611,7 +588,7 @@
                 claim.status === 'hearing_requested' ? 'status-hearing'  :
                 'status-pending';
 
-            // Show the relevant crypto key to the relevant admin
+            // Show the relevant key to the admin
             let adminKeyNote = '';
             if (currentUser.role === 'ta'  && claim.status === 'pending_ta'  && claim.taCryptoKey)
                 adminKeyNote = `<p><small style="color:red;"><b>TA Verify Key:</b> ${claim.taCryptoKey}</small></p>`;
@@ -649,13 +626,13 @@
         document.getElementById('claims-list').innerHTML = sidebarHTML;
     }
 
-    /** Shorten a claim _id for display */
+    // Shorten a claim _id for display 
     function shortId(id) {
         const parts = id.split('_');
         return parts.length > 1 ? parts[1].substring(0, 10) + '...' : id.substring(0, 14) + '...';
     }
 
-    // ── Sidebar click → pan map to claim ──
+    // find a claim frokml sidebar
     function navigateToClaim(claimId) {
         const layer = claimLayerMap[claimId];
         if (layer) {
@@ -664,11 +641,9 @@
         }
     }
 
-    // ══════════════════════════════════════════════════════════════════════════
-    //  5. CITIZEN ACTIONS
-    // ══════════════════════════════════════════════════════════════════════════
+    // CITIZEN ACTIONS
 
-    /** Citizen removes their own pending claim */
+    // Citizen removes their own pending claim 
     async function removeCitizenClaim(claimId, event) {
         event.stopPropagation();
         const yes = await mapConfirm("Are you sure you want to remove this claim?\nThis cannot be undone.");
@@ -678,7 +653,7 @@
         notify("Your claim has been removed.", 'success');
     }
 
-    // Citizen dismisses a rejected claim notification
+    // Citizen dismisses a rejected claim 
     async function dismissRejected(claimId, event) {
         event.stopPropagation();
         const claim = await db.get(claimId);
@@ -686,10 +661,7 @@
         notify("Rejection dismissed.", 'info', 2500);
     }
 
-    // ══════════════════════════════════════════════════════════════════════════
-    //  6. ADMIN VERIFICATION LOGIC
-    // ══════════════════════════════════════════════════════════════════════════
-
+    // ADMIN VERIFICATION LOGIC
     async function verifyAndApprove(claimId, role) {
         const enteredKey = (document.getElementById(`key-${claimId}`) || {}).value || '';
         const claim      = await db.get(claimId);
@@ -705,7 +677,6 @@
         await db.put(claim);
         map.closePopup();
         notify(`Claim ${role.toUpperCase()} Approved.`, 'success');
-        // loadClaims fires via debounced sync listener
     }
 
     async function rejectClaim(claimId, role) {
@@ -740,9 +711,7 @@
         notify("Claim denied. The citizen will be notified.", 'warning');
     }
 
-    // ══════════════════════════════════════════════════════════════════════════
-    //  7. LIVE SYNC LISTENER (debounced)
-    // ══════════════════════════════════════════════════════════════════════════
+    // LIVE SYNC LISTENER 
     db.changes({ since: 'now', live: true, include_docs: true }).on('change', () => {
         if (currentUser) scheduleLoadClaims();
     });
