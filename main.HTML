@@ -282,9 +282,9 @@
         document.getElementById('app-screen').style.display   = 'flex';
 
         document.getElementById('header-title').innerText =
-            role === 'citizen' ? "MunyaMap Land Portal" :
-            role === 'ta'      ? "MunyaMap: Traditional Authority Admin Portal" :
-                                 "MunyaMap: Communal Land Board Admin Portal";
+            role === 'citizen' ? "Land Acquisition Portal" :
+            role === 'ta'      ? "Land Acquisition Portal: Traditional Authority [ADMIN]" :
+                                 "Land Acquisition Portal: Communal Land Board Admin [ADMIN]";
         document.getElementById('sidebar-title').innerText =
             role === 'citizen' ? "My Claims" : "All System Claims";
         document.getElementById('user-info').innerText = `Logged in as: ${email}`;
