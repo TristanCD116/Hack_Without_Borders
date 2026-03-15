@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Navibian Land Claim Portal - Omusati Region</title>
+    <title>Namibian Land Claim Portal - Omusati Region</title>
 
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.css" />
@@ -29,11 +29,10 @@
         .main-container { display: flex; flex: 1; overflow: hidden; }
         .sidebar { width: 350px; background: white; padding: 20px; overflow-y: auto; box-shadow: 2px 0 5px rgba(0,0,0,0.05); z-index: 2; }
 
-        /* Map wrapper: positions toast/dialog overlays relative to map area */
         .map-wrapper { position: relative; flex: 1; overflow: hidden; }
         #map { width: 100%; height: 100%; z-index: 1; }
 
-        /* ─── Map toast notification (replaces browser alert) ─── */
+       /*Browser Alerts for cOde*/
         .map-toast {
             position: absolute; top: 16px; left: 50%; transform: translateX(-50%);
             z-index: 1100; padding: 14px 28px; border-radius: 8px;
@@ -47,7 +46,7 @@
         .map-toast.warning { background: var(--warning); }
         .map-toast.info    { background: var(--secondary); }
 
-        /* ─── Map dialog overlay (replaces confirm / prompt) ─── */
+        /* ─── Map dialog overlay */
         .map-dialog-overlay {
             position: absolute; top: 0; left: 0; right: 0; bottom: 0;
             background: rgba(0,0,0,0.45); z-index: 1200;
@@ -172,24 +171,44 @@
         clb:     { email: 'clb@omusati.na', password: 'clb_pass_456' }
     };
 
-    // ── Geographic constants ─────────────────────────────────────────────────
-    // Namibia bounding box (simplified)
-    const namibiaBounds = turf.polygon([[
-        [11.7, -17.0], [25.3, -17.0], [25.3, -29.0], [11.7, -29.0], [11.7, -17.0]
-    ]]);
+    // Geographic constants
+    const bounds = turf.polygon([[
+    [14.2874, -17.3881],
+    [15.5591, -17.3885],
+    [15.6389, -17.5977],
+    [15.4998, -18.1512],
+    [15.5633, -18.6232],
+    [15.5136, -18.9830],
+    [15.3173, -19.1635],
+    [14.5362, -19.2467],
+    [14.4060, -19.2148],
+    [14.3036, -18.6622],
+    [14.2903, -18.0792],
+    [14.1509, -17.7209],
+    [14.1366, -17.5667],
+    [14.2160, -17.4430],
+    [14.2874, -17.3881]
+]]);
 
     // Omusati service-region border (approximate) — drawn on map as dashed line
     const omusatiCoords = [
-        [-17.35, 14.00], [-17.35, 15.50], [-17.55, 15.70],
-        [-18.00, 15.70], [-18.45, 15.40], [-18.50, 15.00],
-        [-18.30, 14.10], [-17.90, 13.80], [-17.50, 13.90], [-17.35, 14.00]
-    ];
+    [-17.3881, 14.2874],
+    [-17.3885, 15.5591],
+    [-17.5977, 15.6389],
+    [-18.1512, 15.4998],
+    [-18.6232, 15.5633],
+    [-18.9830, 15.5136],
+    [-19.1635, 15.3173],
+    [-19.2467, 14.5362],
+    [-19.2148, 14.4060],
+    [-18.6622, 14.3036],
+    [-18.0792, 14.2903],
+    [-17.7209, 14.1509],
+    [-17.5667, 14.1366],
+    [-17.4430, 14.2160],
+    [-17.3881, 14.2874]
+];
 
-    // Hardcoded fallback water polygon: Olushandja Dam [lon, lat]
-    const olushandjaDam = turf.polygon([[
-        [14.65, -17.40], [14.70, -17.40], [14.70, -17.48], [14.65, -17.48], [14.65, -17.40]
-    ]]);
-    waterPolygons.push(olushandjaDam);
 
     // ══════════════════════════════════════════════════════════════════════════
     //  CUSTOM MAP NOTIFICATIONS (replace browser alert / confirm / prompt)
@@ -334,9 +353,6 @@
             fillOpacity: 0, interactive: false
         }).addTo(map).bindTooltip('Omusati Service Region', { permanent: false, direction: 'center' });
 
-        // ── Render hardcoded water overlay ──
-        renderWaterOverlay();
-
         // ── Fetch live water bodies from OpenStreetMap (Overpass API) ──
         fetchWaterBodies();
 
@@ -367,9 +383,9 @@
                     return notify(`Claim Denied: Your plot is ${areaHectares.toFixed(2)} ha. Maximum allowed by CLRA is 50 ha.`, 'error', 5000);
                 }
 
-                // Validation 2 – Must be inside Namibia
-                if (!turf.booleanContains(namibiaBounds, turf.feature(newGeoJSON.geometry))) {
-                    return notify("Claim Denied: Your claim must be located within Namibia.", 'error', 5000);
+                // Validation 2 – Must be inside Omusati coords
+                if (!turf.booleanContains(bounds, turf.feature(newGeoJSON.geometry))) {
+                    return notify("Claim Denied: Your claim must be located within the Omusati region.", 'error', 5000);
                 }
 
                 // Validation 3 – No water bodies
@@ -547,16 +563,16 @@
             // Sidebar visibility: citizens see only their own; admins see all (except rejected, filtered above)
             const showInSidebar = isAdmin || isOwnClaim;
 
-            // ── Colour coding ──
+            // color coding 
             let color;
             if (currentUser.role === 'citizen' && !isOwnClaim) {
-                color = '#3498db';          // other citizens' claims → blue
+                color = '#393D47';     
             } else if (claim.status === 'approved')          { color = '#27ae60'; }
               else if (claim.status === 'rejected')          { color = '#e74c3c'; }
               else if (claim.status === 'hearing_requested') { color = '#9b59b6'; }
               else                                           { color = '#f39c12'; }
 
-            // ── Add polygon to map ──
+            // Add polygon to map
             const layer = L.geoJSON(claim.boundary, {
                 style: { color, weight: 2, fillOpacity: 0.4 }
             });
@@ -571,7 +587,7 @@
                 popupContent += `<b style="color:#e74c3c;">Reason:</b> ${claim.rejectionReason}<br>`;
             }
 
-            // Admin verification form (in Leaflet popup on the polygon)
+            // Admin verification form 
             if ((currentUser.role === 'ta'  && claim.status === 'pending_ta') ||
                 (currentUser.role === 'clb' && claim.status === 'pending_clb')) {
                 popupContent += `
@@ -662,7 +678,7 @@
         notify("Your claim has been removed.", 'success');
     }
 
-    /** Citizen dismisses a rejected claim notification (permanently deletes it) */
+    // Citizen dismisses a rejected claim notification
     async function dismissRejected(claimId, event) {
         event.stopPropagation();
         const claim = await db.get(claimId);
